@@ -16,6 +16,7 @@ interface Player {
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string
+  pot?: { color: string; count: number }[]
 }
 
 export default function PlayerGame() {
@@ -135,6 +136,34 @@ export default function PlayerGame() {
                   </div>
                   <span className="text-white font-medium">{c.count} × = ${(c.count * cfg.value).toFixed(2)}</span>
                 </div>
+              ) : null
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Pot */}
+      <div className="bg-green-800 rounded-xl p-5 border border-green-600">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold text-yellow-400">🪙 Pot</h3>
+          <span className="text-white font-bold text-lg">
+            ${(game.pot ?? []).reduce((sum, c) => {
+              const cfg = game.chipConfig.find(x => x.color === c.color)
+              return sum + (cfg?.value ?? 0) * c.count
+            }, 0).toFixed(2)}
+          </span>
+        </div>
+        {(game.pot ?? []).filter(c => c.count > 0).length === 0 ? (
+          <p className="text-green-500 italic text-sm">Pot is empty</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {(game.pot ?? []).filter(c => c.count > 0).map(c => {
+              const cfg = game.chipConfig.find(x => x.color === c.color)
+              return cfg ? (
+                <span key={c.color} className="flex items-center gap-1 bg-green-700 rounded-full px-2 py-0.5 text-xs">
+                  <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: cfg.hexColor }} />
+                  {c.count}× {cfg.label}
+                </span>
               ) : null
             })}
           </div>

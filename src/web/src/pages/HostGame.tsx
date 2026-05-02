@@ -9,13 +9,16 @@ interface Payment {
   amount: number; note: string; ts: string
 }
 interface Player {
-  id: string; name: string
+  id: string; name: string; isHost?: boolean
   chips: { color: string; count: number }[]
   payments: Payment[]
 }
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string; createdAt: string
+  pot: { color: string; count: number }[]
+  actionHistory: { type: string; description: string; ts: string }[]
+  hostPlayerId?: string
 }
 
 function playerValue(player: Player, chipConfig: ChipConfig[]) {
@@ -27,6 +30,12 @@ function playerValue(player: Player, chipConfig: ChipConfig[]) {
 function playerPaid(player: Player) {
   return player.payments.reduce((sum, p) => sum + p.amount, 0)
 }
+function potValue(pot: { color: string; count: number }[], chipConfig: ChipConfig[]) {
+  return (pot ?? []).reduce((sum, c) => {
+    const cfg = chipConfig.find(x => x.color === c.color)
+    return sum + (cfg?.value ?? 0) * c.count
+  }, 0)
+}
 
 export default function HostGame() {
   const { gameId } = useParams<{ gameId: string }>()
@@ -34,10 +43,13 @@ export default function HostGame() {
   const [error, setError] = useState('')
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null)
   const [chipEdits, setChipEdits] = useState<Record<string, number>>({})
+  const [potContribEdits, setPotContribEdits] = useState<Record<string, number>>({})
   const [payAmount, setPayAmount] = useState('')
   const [payNote, setPayNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showAwardPot, setShowAwardPot] = useState(false)
+  const [undoMessage, setUndoMessage] = useState('')
 
   const fetchGame = useCallback(async () => {
     try {
@@ -57,11 +69,14 @@ export default function HostGame() {
   function openDistribute(player: Player) {
     setSelectedPlayer(player.id)
     const edits: Record<string, number> = {}
+    const potEdits: Record<string, number> = {}
     for (const c of player.chips) edits[c.color] = c.count
     for (const cfg of game!.chipConfig) {
       if (!(cfg.color in edits)) edits[cfg.color] = 0
+      potEdits[cfg.color] = 0
     }
     setChipEdits(edits)
+    setPotContribEdits(potEdits)
     setPayAmount('')
     setPayNote('')
   }
@@ -97,6 +112,50 @@ export default function HostGame() {
     setSaving(false)
   }
 
+  async function contributeToPot() {
+    if (!selectedPlayer || !game) return
+    const chips = Object.entries(potContribEdits)
+      .filter(([, count]) => count > 0)
+      .map(([color, count]) => ({ color, count }))
+    if (chips.length === 0) return
+    setSaving(true)
+    try {
+      await axios.post(`/api/games/${gameId}/pot/contribute`, { playerId: selectedPlayer, chips })
+      await fetchGame()
+      setPotContribEdits(Object.fromEntries(Object.keys(potContribEdits).map(k => [k, 0])))
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to contribute to pot')
+    }
+    setSaving(false)
+  }
+
+  async function awardPot(playerId: string) {
+    if (!game) return
+    setSaving(true)
+    try {
+      await axios.post(`/api/games/${gameId}/pot/award`, { playerId })
+      await fetchGame()
+      setShowAwardPot(false)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to award pot')
+    }
+    setSaving(false)
+  }
+
+  async function undoLastAction() {
+    if (!game) return
+    setSaving(true)
+    try {
+      const res = await axios.post(`/api/games/${gameId}/undo`)
+      await fetchGame()
+      setUndoMessage(`Undid: ${res.data.undid}`)
+      setTimeout(() => setUndoMessage(''), 3000)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Nothing to undo')
+    }
+    setSaving(false)
+  }
+
   function copyCode() {
     navigator.clipboard.writeText(gameId || '')
     setCopied(true)
@@ -107,6 +166,9 @@ export default function HostGame() {
   if (!game) return <div className="text-green-300 p-4">Loading game...</div>
 
   const player = game.players.find(p => p.id === selectedPlayer)
+  const currentPotValue = potValue(game.pot ?? [], game.chipConfig)
+  const hasPotChips = (game.pot ?? []).some(c => c.count > 0)
+  const canUndo = (game.actionHistory ?? []).length > 0
 
   return (
     <div className="space-y-6">
@@ -129,6 +191,48 @@ export default function HostGame() {
         <p className="text-green-400 text-xs mt-2">Share this code with players → they go to this site and enter the code</p>
       </div>
 
+      {/* Pot + Undo */}
+      <div className="bg-green-800 rounded-xl p-5 border border-green-600">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-bold text-yellow-400">🪙 Pot</h3>
+          <div className="flex items-center gap-3">
+            {undoMessage && <span className="text-green-400 text-sm">{undoMessage}</span>}
+            <button onClick={undoLastAction} disabled={!canUndo || saving}
+              className="text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white px-3 py-1.5 rounded-lg transition">
+              ↩ Undo
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            {!hasPotChips ? (
+              <p className="text-green-500 italic text-sm">Pot is empty</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(game.pot ?? []).filter(c => c.count > 0).map(c => {
+                  const cfg = game.chipConfig.find(x => x.color === c.color)
+                  return cfg ? (
+                    <span key={c.color} className="flex items-center gap-1 bg-green-700 rounded-full px-2 py-0.5 text-xs">
+                      <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: cfg.hexColor }} />
+                      {c.count}× {cfg.label}
+                    </span>
+                  ) : null
+                })}
+              </div>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-yellow-400">${currentPotValue.toFixed(2)}</p>
+            {hasPotChips && (
+              <button onClick={() => setShowAwardPot(true)}
+                className="mt-2 bg-yellow-500 hover:bg-yellow-400 text-green-900 font-bold px-4 py-1.5 rounded-lg text-sm transition">
+                Award Pot
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Player list */}
       <div className="space-y-3">
         <h3 className="text-lg font-bold text-green-300">Players</h3>
@@ -144,7 +248,9 @@ export default function HostGame() {
               className="bg-green-800 rounded-xl p-4 border border-green-600 cursor-pointer hover:border-yellow-400 transition"
               onClick={() => openDistribute(p)}>
               <div className="flex justify-between items-center">
-                <span className="font-bold text-white text-lg">{p.name}</span>
+                <span className="font-bold text-white text-lg">
+                  {p.name}{p.isHost && <span className="ml-2 text-xs text-yellow-400 font-normal">(host)</span>}
+                </span>
                 <span className={`text-sm font-medium ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   Net: {net >= 0 ? '+' : ''}{net.toFixed(2)}
                 </span>
@@ -183,12 +289,14 @@ export default function HostGame() {
         </div>
       </div>
 
-      {/* Distribute modal */}
+      {/* Player modal */}
       {selectedPlayer && player && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-green-900 rounded-2xl p-6 w-full max-w-md border border-green-600 space-y-5">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-green-900 rounded-2xl p-6 w-full max-w-md border border-green-600 space-y-5 my-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold text-yellow-400">{player.name}</h3>
+              <h3 className="text-xl font-bold text-yellow-400">
+                {player.name}{player.isHost && <span className="ml-2 text-xs text-yellow-300 font-normal">(host)</span>}
+              </h3>
               <button onClick={() => setSelectedPlayer(null)} className="text-green-400 hover:text-white text-2xl">✕</button>
             </div>
 
@@ -214,6 +322,38 @@ export default function HostGame() {
               <button onClick={saveChips} disabled={saving}
                 className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 rounded-lg transition">
                 {saving ? 'Saving...' : 'Save Chips'}
+              </button>
+            </div>
+
+            {/* Contribute to pot */}
+            <div className="space-y-3 border-t border-green-700 pt-4">
+              <h4 className="text-green-300 font-medium">🪙 Contribute to Pot</h4>
+              {game.chipConfig.map(cfg => {
+                const available = player.chips.find(c => c.color === cfg.color)?.count ?? 0
+                const contrib = potContribEdits[cfg.color] || 0
+                return (
+                  <div key={cfg.color} className="flex items-center gap-3">
+                    <span className="w-5 h-5 rounded-full border border-gray-400 flex-shrink-0" style={{ backgroundColor: cfg.hexColor }} />
+                    <span className="flex-1 text-sm text-white">{cfg.label}
+                      <span className="text-green-400 text-xs ml-1">({available} avail)</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setPotContribEdits(e => ({ ...e, [cfg.color]: Math.max(0, (e[cfg.color] || 0) - 1) }))}
+                        className="w-7 h-7 bg-green-700 rounded text-white hover:bg-green-600">−</button>
+                      <span className="w-8 text-center font-bold text-white">{contrib}</span>
+                      <button onClick={() => setPotContribEdits(e => ({ ...e, [cfg.color]: Math.min(available, (e[cfg.color] || 0) + 1) }))}
+                        disabled={contrib >= available}
+                        className="w-7 h-7 bg-green-700 rounded text-white hover:bg-green-600 disabled:opacity-30">+</button>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="text-right text-sm text-green-300">
+                Contributing: ${game.chipConfig.reduce((s, c) => s + c.value * (potContribEdits[c.color] || 0), 0).toFixed(2)}
+              </div>
+              <button onClick={contributeToPot} disabled={saving || Object.values(potContribEdits).every(v => v === 0)}
+                className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-gray-600 text-white font-bold py-2 rounded-lg transition">
+                {saving ? 'Saving...' : 'Move Chips to Pot'}
               </button>
             </div>
 
@@ -254,6 +394,30 @@ export default function HostGame() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Award Pot modal */}
+      {showAwardPot && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-green-900 rounded-2xl p-6 w-full max-w-md border border-green-600 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold text-yellow-400">Award Pot — ${currentPotValue.toFixed(2)}</h3>
+              <button onClick={() => setShowAwardPot(false)} className="text-green-400 hover:text-white text-2xl">✕</button>
+            </div>
+            <p className="text-green-300 text-sm">Select the winner:</p>
+            <div className="space-y-2">
+              {game.players.map(p => (
+                <button key={p.id} onClick={() => awardPot(p.id)} disabled={saving}
+                  className="w-full flex justify-between items-center bg-green-800 hover:bg-green-700 border border-green-600 hover:border-yellow-400 rounded-xl px-4 py-3 transition disabled:opacity-50">
+                  <span className="font-bold text-white">
+                    {p.name}{p.isHost && <span className="ml-2 text-xs text-yellow-400 font-normal">(host)</span>}
+                  </span>
+                  <span className="text-green-300 text-sm">${playerValue(p, game.chipConfig).toFixed(2)} in chips</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

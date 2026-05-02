@@ -46,6 +46,7 @@ export default function HostSetup() {
     setError('')
     try {
       const res = await axios.post('/api/games', { hostName: hostName.trim(), chipConfig: chips })
+      localStorage.setItem(`host_${res.data.id}`, res.data.hostPlayerId)
       navigate(`/host/game/${res.data.id}`)
     } catch (e: any) {
       setError(e.response?.data?.error || 'Failed to create game')
