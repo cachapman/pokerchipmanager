@@ -1,0 +1,22 @@
+{
+  "name": "poker-chip-api",
+  "version": "1.0.0",
+  "description": "Poker Chip Manager API",
+  "main": "dist/src/functions/*.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prestart": "npm run build",
+    "start": "func start",
+    "test": "echo 'no tests'"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.1.1",
+    "@azure/functions": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.7.2",
+    "azure-functions-core-tools": "^4.0.7030"
+  }
+}
