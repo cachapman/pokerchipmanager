@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import axios from 'axios'
+import BetScreen from './BetScreen'
 
 interface ChipConfig {
   color: string; label: string; value: number; count: number; hexColor: string
@@ -17,7 +18,7 @@ interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string; createdAt: string
   pot: { color: string; count: number }[]
-  actionHistory: { type: string; description: string; ts: string }[]
+  actionHistory: { type: string; description: string; ts: string; prevState: { players: { id: string }[] } }[]
   hostPlayerId?: string
 }
 
@@ -50,6 +51,7 @@ export default function HostGame() {
   const [copied, setCopied] = useState(false)
   const [showAwardPot, setShowAwardPot] = useState(false)
   const [undoMessage, setUndoMessage] = useState('')
+  const [tab, setTab] = useState<'manage' | 'mystack'>('manage')
 
   const fetchGame = useCallback(async () => {
     try {
@@ -191,7 +193,33 @@ export default function HostGame() {
         <p className="text-green-400 text-xs mt-2">Share this code with players → they go to this site and enter the code</p>
       </div>
 
-      {/* Pot + Undo */}
+      {/* Tabs */}
+      <div className="flex bg-green-800 rounded-xl border border-green-600 overflow-hidden">
+        <button
+          onClick={() => setTab('manage')}
+          className={`flex-1 py-3 font-bold text-sm transition ${tab === 'manage' ? 'bg-green-600 text-yellow-400' : 'text-green-300 hover:text-white'}`}
+        >
+          🃏 Manage Game
+        </button>
+        <button
+          onClick={() => setTab('mystack')}
+          className={`flex-1 py-3 font-bold text-sm transition ${tab === 'mystack' ? 'bg-green-600 text-yellow-400' : 'text-green-300 hover:text-white'}`}
+        >
+          🎰 My Stack
+        </button>
+      </div>
+
+      {/* My Stack tab — host's own bet/buy-in screen */}
+      {tab === 'mystack' && game.hostPlayerId && (
+        <BetScreen
+          game={game}
+          playerId={game.hostPlayerId}
+          gameId={gameId!}
+          onRefresh={fetchGame}
+        />
+      )}
+
+      {tab === 'manage' && (<>
       <div className="bg-green-800 rounded-xl p-5 border border-green-600">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-bold text-yellow-400">🪙 Pot</h3>
@@ -421,6 +449,7 @@ export default function HostGame() {
           </div>
         </div>
       )}
+      </>)}
     </div>
   )
 }
