@@ -99,6 +99,20 @@ export default function HostGame() {
     setSaving(false)
   }
 
+  async function clearWagered() {
+    if (!selectedPlayer || !game) return
+    setSaving(true)
+    try {
+      const p = game.players.find(x => x.id === selectedPlayer)!
+      const chips = p.chips.map(c => ({ color: c.color, count: c.count }))
+      await axios.put(`/api/games/${gameId}/players/${selectedPlayer}/chips`, { chips, totalBetsValue: 0 })
+      await fetchGame()
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to clear')
+    }
+    setSaving(false)
+  }
+
   async function recordPayment() {
     if (!selectedPlayer || !payAmount || !game) return
     setSaving(true)
@@ -437,6 +451,19 @@ export default function HostGame() {
                 </div>
                 <div className="text-right text-sm font-bold text-yellow-400 mt-1">
                   Total: ${playerPaid(player).toFixed(2)}
+                </div>
+              </div>
+            )}
+
+            {/* Clear wagered */}
+            {(player.totalBetsValue ?? 0) > 0 && (
+              <div className="border-t border-green-700 pt-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-green-400 text-sm">Total wagered: <span className="text-orange-300 font-bold">${(player.totalBetsValue ?? 0).toFixed(2)}</span></span>
+                  <button onClick={clearWagered} disabled={saving}
+                    className="text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition">
+                    Clear Wagered
+                  </button>
                 </div>
               </div>
             )}

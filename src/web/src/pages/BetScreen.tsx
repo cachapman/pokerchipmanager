@@ -151,7 +151,7 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
         </div>
         <div className="bg-green-800 rounded-xl p-3 border border-green-600">
           <p className="text-xs text-green-400">Total Wagered</p>
-          <p className="text-lg font-bold text-green-300">${totalWagered.toFixed(2)}</p>
+          <p className="text-lg font-bold text-green-300">{totalWagered > 0 ? `$${totalWagered.toFixed(2)}` : '—'}</p>
         </div>
       </div>
 

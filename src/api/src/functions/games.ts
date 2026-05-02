@@ -30,6 +30,37 @@ function cors(body: unknown, status = 200): HttpResponseInit {
   };
 }
 
+// GET /api/games — list active games
+app.http("listGames", {
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  route: "games",
+  handler: async (req: HttpRequest, ctx: InvocationContext) => {
+    if (req.method === "OPTIONS") return cors({});
+    try {
+      const container = getCosmosClient();
+      const { resources } = await container.items
+        .query("SELECT c.id, c.hostName, c.status, c.createdAt, c.players, c.actionHistory FROM c WHERE c.status = 'active'")
+        .fetchAll();
+      // Return lightweight summary per game
+      const summary = resources.map((g: any) => ({
+        id: g.id,
+        hostName: g.hostName,
+        createdAt: g.createdAt,
+        playerCount: (g.players ?? []).length,
+        playerNames: (g.players ?? []).map((p: any) => p.name),
+        lastAction: g.actionHistory?.length
+          ? g.actionHistory[g.actionHistory.length - 1]
+          : null,
+      }));
+      return cors(summary);
+    } catch (e: any) {
+      ctx.error("listGames error:", e);
+      return cors({ error: "Internal server error" }, 500);
+    }
+  },
+});
+
 // POST /api/games — create game
 app.http("createGame", {
   methods: ["POST", "OPTIONS"],
@@ -143,6 +174,9 @@ app.http("updateChips", {
       if (!player) return cors({ error: "Player not found" }, 404);
 
       player.chips = body.chips;
+      if (body.totalBetsValue !== undefined) {
+        player.totalBetsValue = body.totalBetsValue;
+      }
       await container.item(id, id).replace(game);
       return cors({ success: true });
     } catch (e: any) {
