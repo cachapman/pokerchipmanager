@@ -310,7 +310,7 @@ export default function HostGame() {
         {game.players.map(p => {
           const chipVal = playerValue(p, game.chipConfig)
           const paid = playerPaid(p)
-          const net = paid - chipVal
+          const net = chipVal - paid
           return (
             <div key={p.id}
               className="bg-green-800 rounded-xl p-4 border border-green-600 cursor-pointer hover:border-yellow-400 transition"

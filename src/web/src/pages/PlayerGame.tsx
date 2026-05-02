@@ -112,7 +112,7 @@ export default function PlayerGame() {
     return sum + (cfg?.value ?? 0) * c.count
   }, 0)
   const paid = me.payments.reduce((sum, p) => sum + p.amount, 0)
-  const net = paid - chipVal
+  const net = chipVal - paid
 
   return (
     <div className="space-y-5">
