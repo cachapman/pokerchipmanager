@@ -18,7 +18,7 @@ interface Game {
   players: Player[]
   pot: { color: string; count: number }[]
   potBreakdown?: { playerId: string; playerName: string; value: number }[]
-  actionHistory: { type: string; prevState: { players: { id: string }[] }; playerId?: string; value?: number }[]
+  actionHistory: { type: string; prevState: { players: { id: string }[] }; playerId?: string; value?: number; winnerId?: string }[]
 }
 
 interface Props {
@@ -129,6 +129,7 @@ function ChipStack({
 }
 
 export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) {
+  const [confirmRake, setConfirmRake] = useState(false)
   const [pendingBet, setPendingBet] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
@@ -183,6 +184,36 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
     !hasPendingBet &&
     lastAction?.type === 'pot_contribution' &&
     lastAction?.prevState?.players?.[0]?.id === playerId
+  const canUndoRake =
+    !hasPendingBet &&
+    lastAction?.type === 'pot_award' &&
+    lastAction?.winnerId === playerId
+
+  async function rakeItIn() {
+    if (!confirmRake) { setConfirmRake(true); return }
+    setConfirmRake(false)
+    setSaving(true)
+    try {
+      await axios.post(`/api/games/${gameId}/pot/award`, { playerId })
+      flash(`🎰 You raked in $${potVal.toFixed(2)}!`)
+      await onRefresh()
+    } catch (e: any) {
+      flash(e.response?.data?.error || 'Failed to rake pot', true)
+    }
+    setSaving(false)
+  }
+
+  async function undoRake() {
+    setSaving(true)
+    try {
+      await axios.post(`/api/games/${gameId}/undo`)
+      flash('Rake undone — pot restored.')
+      await onRefresh()
+    } catch (e: any) {
+      flash(e.response?.data?.error || 'Could not undo', true)
+    }
+    setSaving(false)
+  }
 
   async function placeBet() {
     if (!hasPendingBet) return
@@ -357,6 +388,33 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
             </button>
           </div>
         </div>
+      )}
+
+      {/* Rake it in */}
+      {potVal > 0 && !hasPendingBet && (
+        <button
+          onClick={rakeItIn}
+          onBlur={() => setConfirmRake(false)}
+          disabled={saving}
+          className={`w-full font-bold py-3 rounded-xl text-lg transition ${
+            confirmRake
+              ? 'bg-yellow-500 hover:bg-yellow-400 text-green-900 animate-pulse'
+              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+          }`}
+        >
+          {confirmRake ? `✅ Confirm — Rake $${potVal.toFixed(2)}?` : `🎰 Rake It In ($${potVal.toFixed(2)})`}
+        </button>
+      )}
+
+      {/* Undo rake */}
+      {canUndoRake && (
+        <button
+          onClick={undoRake}
+          disabled={saving}
+          className="w-full bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-medium py-2.5 rounded-xl text-sm transition"
+        >
+          ↩ Undo Rake
+        </button>
       )}
 
       {/* Recall chips */}
