@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
+import WinnerSplash from '../components/WinnerSplash'
 
 interface ChipConfig {
   color: string; label: string; value: number; hexColor: string
@@ -130,6 +131,7 @@ function ChipStack({
 
 export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) {
   const [confirmRake, setConfirmRake] = useState(false)
+  const [splashAmount, setSplashAmount] = useState<number | null>(null)
   const [pendingBet, setPendingBet] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
@@ -195,7 +197,7 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
     setSaving(true)
     try {
       await axios.post(`/api/games/${gameId}/pot/award`, { playerId })
-      flash(`🎰 You raked in $${potVal.toFixed(2)}!`)
+      setSplashAmount(potVal)
       await onRefresh()
     } catch (e: any) {
       flash(e.response?.data?.error || 'Failed to rake pot', true)
@@ -273,6 +275,9 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
 
   return (
     <div className="space-y-5">
+      {splashAmount !== null && (
+        <WinnerSplash amount={splashAmount} onDone={() => setSplashAmount(null)} />
+      )}
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-2 text-center">
         <div className="bg-green-800 rounded-xl p-3 border border-green-600">

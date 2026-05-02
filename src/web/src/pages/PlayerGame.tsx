@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import axios from 'axios'
 import BetScreen from './BetScreen'
+import WinnerSplash from '../components/WinnerSplash'
 
 interface ChipConfig {
   color: string; label: string; value: number; count: number; hexColor: string
@@ -42,11 +43,28 @@ export default function PlayerGame() {
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'bet' | 'details'>('bet')
+  const [splashAmount, setSplashAmount] = useState<number | null>(null)
+  const lastSeenActionTs = useRef<string | null>(null)
 
   const fetchGame = useCallback(async () => {
     try {
       const res = await axios.get(`/api/games/${gameId}`)
-      setGame(res.data)
+      const incoming: Game = res.data
+      // Detect host-awarded pot win for this player
+      if (playerId && incoming.actionHistory?.length) {
+        const last = incoming.actionHistory[incoming.actionHistory.length - 1]
+        if (
+          last.type === 'pot_award' &&
+          last.winnerId === playerId &&
+          last.ts !== lastSeenActionTs.current
+        ) {
+          lastSeenActionTs.current = last.ts
+          setSplashAmount(last.value ?? 0)
+        } else {
+          lastSeenActionTs.current = last.ts
+        }
+      }
+      setGame(incoming)
     } catch (e: any) {
       setError(e.response?.data?.error || 'Game not found')
     }
@@ -116,6 +134,9 @@ export default function PlayerGame() {
 
   return (
     <div className="space-y-5">
+      {splashAmount !== null && (
+        <WinnerSplash amount={splashAmount} onDone={() => setSplashAmount(null)} />
+      )}
       {/* Header */}
       <div className="bg-green-800 rounded-xl p-4 border border-green-600">
         <div className="flex justify-between items-center">
