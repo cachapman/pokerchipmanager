@@ -152,6 +152,14 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
     setPendingBet(b => ({ ...b, [color]: Math.max(0, (b[color] ?? 0) - 1) }))
   }
 
+  function allIn() {
+    const all: Record<string, number> = {}
+    for (const c of player!.chips) {
+      if (c.count > 0) all[c.color] = c.count
+    }
+    setPendingBet(all)
+  }
+
   const pendingTotal = game.chipConfig.reduce(
     (sum, c) => sum + c.value * (pendingBet[c.color] ?? 0), 0
   )
@@ -256,7 +264,16 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
 
       {/* Visual chip stacks */}
       <div className="bg-green-800 rounded-xl p-5 border border-green-600">
-        <p className="font-bold text-yellow-400 mb-5">Your Stack — tap a stack to bet one chip</p>
+        <div className="flex justify-between items-center mb-5">
+          <p className="font-bold text-yellow-400">Your Stack — tap a stack to bet one chip</p>
+          <button
+            onClick={allIn}
+            disabled={saving || chipCfgsWithChips.length === 0}
+            className="bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-bold px-4 py-1.5 rounded-lg text-sm transition"
+          >
+            ALL IN 🔥
+          </button>
+        </div>
         {chipCfgsWithChips.length === 0 ? (
           <p className="text-green-500 italic text-sm">No chips yet — waiting for host to distribute</p>
         ) : (
