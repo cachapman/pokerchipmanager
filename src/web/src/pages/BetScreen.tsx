@@ -11,11 +11,13 @@ interface Player {
   id: string; name: string; isHost?: boolean
   chips: { color: string; count: number }[]
   payments: Payment[]
+  totalBetsValue?: number
 }
 interface Game {
   chipConfig: ChipConfig[]
   players: Player[]
   pot: { color: string; count: number }[]
+  potBreakdown?: { playerId: string; playerName: string; value: number }[]
   actionHistory: { type: string; prevState: { players: { id: string }[] } }[]
 }
 
@@ -68,7 +70,8 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
   }, 0)
   const totalPaid = player.payments.reduce((s, p) => s + p.amount, 0)
 
-  // Player can only undo if their contribution was the last recorded action
+  const myBetInPot = (game.potBreakdown ?? []).find(e => e.playerId === playerId)?.value ?? 0
+  const totalWagered = player.totalBetsValue ?? 0
   const lastAction = game.actionHistory?.slice(-1)[0]
   const canRecall =
     !hasPendingBet &&
@@ -133,7 +136,7 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
   return (
     <div className="space-y-5">
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center">
         <div className="bg-green-800 rounded-xl p-3 border border-green-600">
           <p className="text-xs text-green-400">My Stack</p>
           <p className="text-lg font-bold text-white">${chipValue.toFixed(2)}</p>
@@ -142,9 +145,13 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
           <p className="text-xs text-green-400">Pot</p>
           <p className="text-lg font-bold text-yellow-400">${potVal.toFixed(2)}</p>
         </div>
+        <div className="bg-green-800 rounded-xl p-3 border border-orange-600">
+          <p className="text-xs text-green-400">My Bet in Pot</p>
+          <p className="text-lg font-bold text-orange-300">${myBetInPot.toFixed(2)}</p>
+        </div>
         <div className="bg-green-800 rounded-xl p-3 border border-green-600">
-          <p className="text-xs text-green-400">Paid In</p>
-          <p className="text-lg font-bold text-green-300">${totalPaid.toFixed(2)}</p>
+          <p className="text-xs text-green-400">Total Wagered</p>
+          <p className="text-lg font-bold text-green-300">${totalWagered.toFixed(2)}</p>
         </div>
       </div>
 

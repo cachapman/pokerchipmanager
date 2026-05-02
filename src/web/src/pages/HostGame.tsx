@@ -13,11 +13,13 @@ interface Player {
   id: string; name: string; isHost?: boolean
   chips: { color: string; count: number }[]
   payments: Payment[]
+  totalBetsValue?: number
 }
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string; createdAt: string
   pot: { color: string; count: number }[]
+  potBreakdown?: { playerId: string; playerName: string; value: number }[]
   actionHistory: { type: string; description: string; ts: string; prevState: { players: { id: string }[] } }[]
   hostPlayerId?: string
 }
@@ -259,6 +261,19 @@ export default function HostGame() {
             )}
           </div>
         </div>
+        {hasPotChips && (game.potBreakdown ?? []).length > 0 && (
+          <div className="mt-3 border-t border-green-700 pt-3">
+            <p className="text-xs text-green-400 font-medium mb-2">Contributions this hand</p>
+            <div className="space-y-1">
+              {(game.potBreakdown ?? []).map(entry => (
+                <div key={entry.playerId} className="flex justify-between text-sm">
+                  <span className="text-green-300">{entry.playerName}</span>
+                  <span className="text-white font-medium">${entry.value.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Player list */}
@@ -286,6 +301,9 @@ export default function HostGame() {
               <div className="flex gap-4 mt-2 text-sm text-green-300">
                 <span>Chips: <span className="text-white">${chipVal.toFixed(2)}</span></span>
                 <span>Paid: <span className="text-white">${paid.toFixed(2)}</span></span>
+                {(p.totalBetsValue ?? 0) > 0 && (
+                  <span>Wagered: <span className="text-orange-300">${(p.totalBetsValue ?? 0).toFixed(2)}</span></span>
+                )}
               </div>
               <div className="flex gap-2 mt-2 flex-wrap">
                 {p.chips.filter(c => c.count > 0).map(c => {

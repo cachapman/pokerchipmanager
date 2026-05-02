@@ -13,11 +13,13 @@ interface Player {
   id: string; name: string; isHost?: boolean
   chips: { color: string; count: number }[]
   payments: Payment[]
+  totalBetsValue?: number
 }
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string
   pot: { color: string; count: number }[]
+  potBreakdown?: { playerId: string; playerName: string; value: number }[]
   actionHistory: { type: string; prevState: { players: { id: string }[] } }[]
 }
 
@@ -207,7 +209,12 @@ export default function PlayerGame() {
                   return (
                     <div key={p.id} className="flex justify-between text-sm">
                       <span className="text-white">{p.name}{p.isHost && <span className="ml-1 text-xs text-yellow-400">(host)</span>}</span>
-                      <span className="text-green-300">${pv.toFixed(2)} in chips</span>
+                      <div className="text-right">
+                        <span className="text-green-300">${pv.toFixed(2)} in chips</span>
+                        {(p.totalBetsValue ?? 0) > 0 && (
+                          <span className="text-orange-300 ml-2">${(p.totalBetsValue ?? 0).toFixed(2)} wagered</span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

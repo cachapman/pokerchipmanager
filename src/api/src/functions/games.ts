@@ -205,6 +205,7 @@ app.http("contributeToPot", {
       if (!player) return cors({ error: "Player not found" }, 404);
 
       if (!game.pot) game.pot = [];
+      if (!game.potBreakdown) game.potBreakdown = [];
       if (!game.actionHistory) game.actionHistory = [];
 
       // Validate player has enough chips
@@ -217,10 +218,18 @@ app.http("contributeToPot", {
         }
       }
 
+      // Compute contribution dollar value
+      const contribValue = (body.chips as { color: string; count: number }[]).reduce((sum, c) => {
+        if (c.count <= 0) return sum;
+        const cfg = (game.chipConfig as { color: string; value: number }[]).find((x: any) => x.color === c.color);
+        return sum + (cfg?.value ?? 0) * c.count;
+      }, 0);
+
       // Save undo snapshot
       const prevState = {
         pot: JSON.parse(JSON.stringify(game.pot)),
-        players: [{ id: player.id, chips: JSON.parse(JSON.stringify(player.chips)) }],
+        potBreakdown: JSON.parse(JSON.stringify(game.potBreakdown)),
+        players: [{ id: player.id, chips: JSON.parse(JSON.stringify(player.chips)), totalBetsValue: player.totalBetsValue ?? 0 }],
       };
 
       // Deduct from player, add to pot
@@ -232,6 +241,17 @@ app.http("contributeToPot", {
         if (potChip) potChip.count += contrib.count;
         else game.pot.push({ color: contrib.color, count: contrib.count });
       }
+
+      // Update pot breakdown (accumulate if player contributed before)
+      const existingBreakdown = game.potBreakdown.find((e: any) => e.playerId === player.id);
+      if (existingBreakdown) {
+        existingBreakdown.value += contribValue;
+      } else {
+        game.potBreakdown.push({ playerId: player.id, playerName: player.name, value: contribValue });
+      }
+
+      // Update player lifetime bet total
+      player.totalBetsValue = (player.totalBetsValue ?? 0) + contribValue;
 
       game.actionHistory.push({
         type: "pot_contribution",
@@ -272,11 +292,13 @@ app.http("awardPot", {
 
       if (!game.pot || game.pot.length === 0) return cors({ error: "Pot is empty" }, 400);
       if (!game.actionHistory) game.actionHistory = [];
+      if (!game.potBreakdown) game.potBreakdown = [];
 
       // Save undo snapshot
       const prevState = {
         pot: JSON.parse(JSON.stringify(game.pot)),
-        players: [{ id: winner.id, chips: JSON.parse(JSON.stringify(winner.chips)) }],
+        potBreakdown: JSON.parse(JSON.stringify(game.potBreakdown)),
+        players: [{ id: winner.id, chips: JSON.parse(JSON.stringify(winner.chips)), totalBetsValue: winner.totalBetsValue ?? 0 }],
       };
 
       // Add pot chips to winner
@@ -296,6 +318,7 @@ app.http("awardPot", {
       if (game.actionHistory.length > 20) game.actionHistory = game.actionHistory.slice(-20);
 
       game.pot = [];
+      game.potBreakdown = [];
 
       await container.item(id, id).replace(game);
       return cors({ success: true });
@@ -328,10 +351,20 @@ app.http("undoAction", {
       // Restore pot
       game.pot = lastAction.prevState.pot;
 
-      // Restore affected players' chips
-      for (const prevPlayer of lastAction.prevState.players as { id: string; chips: any[] }[]) {
+      // Restore pot breakdown if snapshot includes it
+      if (lastAction.prevState.potBreakdown !== undefined) {
+        game.potBreakdown = lastAction.prevState.potBreakdown;
+      }
+
+      // Restore affected players' chips and totalBetsValue
+      for (const prevPlayer of lastAction.prevState.players as { id: string; chips: any[]; totalBetsValue?: number }[]) {
         const player = game.players.find((p: any) => p.id === prevPlayer.id);
-        if (player) player.chips = prevPlayer.chips;
+        if (player) {
+          player.chips = prevPlayer.chips;
+          if (prevPlayer.totalBetsValue !== undefined) {
+            player.totalBetsValue = prevPlayer.totalBetsValue;
+          }
+        }
       }
 
       await container.item(id, id).replace(game);
