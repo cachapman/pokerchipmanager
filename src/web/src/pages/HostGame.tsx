@@ -362,14 +362,18 @@ export default function HostGame() {
 
       {/* Player modal */}
       {selectedPlayer && player && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-green-900 rounded-2xl p-6 w-full max-w-md border border-green-600 space-y-5 my-4">
-            <div className="flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto"
+          onClick={() => setSelectedPlayer(null)}>
+          <div className="bg-green-900 rounded-2xl w-full max-w-md border border-green-600 my-4"
+            onClick={e => e.stopPropagation()}>
+            {/* Sticky header so X is always reachable */}
+            <div className="flex justify-between items-center sticky top-0 bg-green-900 rounded-t-2xl px-6 pt-5 pb-4 border-b border-green-700 z-10">
               <h3 className="text-xl font-bold text-yellow-400">
                 {player.name}{player.isHost && <span className="ml-2 text-xs text-yellow-300 font-normal">(host)</span>}
               </h3>
-              <button onClick={() => setSelectedPlayer(null)} className="text-green-400 hover:text-white text-2xl">✕</button>
+              <button onClick={() => setSelectedPlayer(null)} className="text-green-400 hover:text-white text-2xl leading-none">✕</button>
             </div>
+            <div className="p-6 space-y-5">
 
             {/* Chip distribution */}
             <div className="space-y-3">
@@ -510,6 +514,7 @@ export default function HostGame() {
                 </div>
               ) : null
             })()}
+          </div>
           </div>
         </div>
       )}
