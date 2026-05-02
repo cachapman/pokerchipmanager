@@ -15,12 +15,23 @@ interface Player {
   payments: Payment[]
   totalBetsValue?: number
 }
+interface ActionEntry {
+  type: string
+  description: string
+  ts: string
+  value?: number
+  playerId?: string
+  playerName?: string
+  winnerId?: string
+  winnerName?: string
+  prevState: { players: { id: string }[] }
+}
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string
   pot: { color: string; count: number }[]
   potBreakdown?: { playerId: string; playerName: string; value: number }[]
-  actionHistory: { type: string; prevState: { players: { id: string }[] } }[]
+  actionHistory: ActionEntry[]
 }
 
 export default function PlayerGame() {
@@ -195,6 +206,35 @@ export default function PlayerGame() {
               </div>
             )}
           </div>
+
+          {/* Recent Activity */}
+          {game.actionHistory.length > 0 && (
+            <div className="bg-green-800 rounded-xl p-5 border border-green-600">
+              <h3 className="font-bold text-yellow-400 mb-3">Recent Activity</h3>
+              <div className="space-y-2">
+                {[...game.actionHistory].reverse().slice(0, 5).map((action, i) => {
+                  const isWin = action.type === 'pot_award'
+                  const isMine = action.playerId === playerId || action.winnerId === playerId
+                  return (
+                    <div key={i} className={`flex justify-between items-start text-sm rounded-lg px-3 py-2 ${isMine ? 'bg-green-700/60 border border-green-600' : 'bg-green-900/40'}`}>
+                      <div className="flex items-center gap-2">
+                        <span>{isWin ? '🏆' : '🎲'}</span>
+                        <div>
+                          <p className="text-white leading-tight">{action.description}</p>
+                          <p className="text-xs text-green-500">{new Date(action.ts).toLocaleTimeString()}</p>
+                        </div>
+                      </div>
+                      {action.value != null && (
+                        <span className={`font-bold ml-2 whitespace-nowrap ${isWin ? 'text-yellow-400' : 'text-orange-300'}`}>
+                          {isWin ? '+' : '-'}${action.value.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Other players */}
           {game.players.filter(p => p.id !== playerId).length > 0 && (

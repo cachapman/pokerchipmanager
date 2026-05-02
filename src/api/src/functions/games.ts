@@ -291,6 +291,9 @@ app.http("contributeToPot", {
       game.actionHistory.push({
         type: "pot_contribution",
         description: `${player.name} contributed to pot`,
+        playerId: player.id,
+        playerName: player.name,
+        value: contribValue,
         prevState,
         ts: new Date().toISOString(),
       });
@@ -344,9 +347,18 @@ app.http("awardPot", {
         else winner.chips.push({ color: potChip.color, count: potChip.count });
       }
 
+      // Compute pot value before clearing
+      const awardValue = (game.pot as { color: string; count: number }[]).reduce((sum, c) => {
+        const cfg = (game.chipConfig as { color: string; value: number }[]).find((x: any) => x.color === c.color);
+        return sum + (cfg?.value ?? 0) * c.count;
+      }, 0);
+
       game.actionHistory.push({
         type: "pot_award",
         description: `Pot awarded to ${winner.name}`,
+        winnerId: winner.id,
+        winnerName: winner.name,
+        value: awardValue,
         prevState,
         ts: new Date().toISOString(),
       });

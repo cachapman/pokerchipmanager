@@ -15,12 +15,23 @@ interface Player {
   payments: Payment[]
   totalBetsValue?: number
 }
+interface ActionEntry {
+  type: string
+  description: string
+  ts: string
+  value?: number
+  playerId?: string
+  playerName?: string
+  winnerId?: string
+  winnerName?: string
+  prevState: { players: { id: string }[] }
+}
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
   players: Player[]; status: string; createdAt: string
   pot: { color: string; count: number }[]
   potBreakdown?: { playerId: string; playerName: string; value: number }[]
-  actionHistory: { type: string; description: string; ts: string; prevState: { players: { id: string }[] } }[]
+  actionHistory: ActionEntry[]
   hostPlayerId?: string
 }
 
@@ -467,6 +478,38 @@ export default function HostGame() {
                 </div>
               </div>
             )}
+
+            {/* Recent activity for this player */}
+            {(() => {
+              const playerActions = (game.actionHistory ?? [])
+                .filter(a => a.playerId === player.id || a.winnerId === player.id)
+                .slice(-5)
+                .reverse()
+              return playerActions.length > 0 ? (
+                <div className="border-t border-green-700 pt-3 space-y-2">
+                  <h4 className="text-green-300 text-sm font-medium">Recent Activity</h4>
+                  {playerActions.map((action, i) => {
+                    const isWin = action.type === 'pot_award'
+                    return (
+                      <div key={i} className="flex justify-between items-start text-sm">
+                        <div className="flex items-center gap-2">
+                          <span>{isWin ? '🏆' : '🎲'}</span>
+                          <div>
+                            <p className="text-white leading-tight">{action.description}</p>
+                            <p className="text-xs text-green-500">{new Date(action.ts).toLocaleTimeString()}</p>
+                          </div>
+                        </div>
+                        {action.value != null && (
+                          <span className={`font-bold ml-2 whitespace-nowrap ${isWin ? 'text-yellow-400' : 'text-orange-300'}`}>
+                            {isWin ? '+' : '-'}${action.value.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null
+            })()}
           </div>
         </div>
       )}
