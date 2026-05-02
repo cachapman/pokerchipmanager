@@ -40,7 +40,7 @@ app.http("listGames", {
     try {
       const container = getCosmosClient();
       const { resources } = await container.items
-        .query("SELECT c.id, c.hostName, c.status, c.createdAt, c.players, c.actionHistory FROM c WHERE c.status = 'active'")
+        .query("SELECT TOP 5 c.id, c.hostName, c.status, c.createdAt, c.players, c.actionHistory FROM c WHERE c.status = 'active' AND c.isPublic = true ORDER BY c.createdAt DESC")
         .fetchAll();
       // Return lightweight summary per game
       const summary = resources.map((g: any) => ({
@@ -78,6 +78,7 @@ app.http("createGame", {
         id,
         hostName: body.hostName,
         chipConfig: body.chipConfig,
+        isPublic: body.isPublic === true,
         players: [{
           id: hostPlayerId,
           name: body.hostName,

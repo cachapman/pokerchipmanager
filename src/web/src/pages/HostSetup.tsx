@@ -21,6 +21,7 @@ const DEFAULT_CHIPS: ChipConfig[] = [
 export default function HostSetup() {
   const [hostName, setHostName] = useState('')
   const [chips, setChips] = useState<ChipConfig[]>(DEFAULT_CHIPS)
+  const [isPublic, setIsPublic] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -45,7 +46,7 @@ export default function HostSetup() {
     setLoading(true)
     setError('')
     try {
-      const res = await axios.post('/api/games', { hostName: hostName.trim(), chipConfig: chips })
+      const res = await axios.post('/api/games', { hostName: hostName.trim(), chipConfig: chips, isPublic })
       localStorage.setItem(`host_${res.data.id}`, res.data.hostPlayerId)
       navigate(`/host/game/${res.data.id}`)
     } catch (e: any) {
@@ -69,6 +70,30 @@ export default function HostSetup() {
           placeholder="Enter your name"
           className="w-full bg-green-700 border border-green-500 rounded-lg px-4 py-3 text-white placeholder-green-400 focus:outline-none focus:border-yellow-400"
         />
+      </div>
+
+      {/* Visibility toggle */}
+      <div className="bg-green-800 rounded-xl p-5 border border-green-600">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-white">
+              {isPublic ? '🌐 Public Game' : '🔒 Private Game'}
+            </p>
+            <p className="text-xs text-green-400 mt-0.5">
+              {isPublic
+                ? 'Appears on the home screen — anyone can find and join'
+                : 'Only joinable with the game code — not listed publicly'}
+            </p>
+          </div>
+          <button
+            onClick={() => setIsPublic(p => !p)}
+            className={`relative w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none ${isPublic ? 'bg-yellow-500' : 'bg-gray-600'}`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${isPublic ? 'translate-x-7' : 'translate-x-0'}`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Chip config */}

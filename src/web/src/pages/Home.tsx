@@ -65,10 +65,10 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Running Games */}
+      {/* Recent Public Games */}
       {runningGames.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-bold text-green-300">🟢 Active Games</h2>
+          <h2 className="text-lg font-bold text-green-300">🌐 Recent Public Games</h2>
           {runningGames.map(g => (
             <button
               key={g.id}
