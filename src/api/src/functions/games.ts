@@ -297,8 +297,7 @@ app.http("contributeToPot", {
         prevState,
         ts: new Date().toISOString(),
       });
-      // Keep history bounded
-      if (game.actionHistory.length > 20) game.actionHistory = game.actionHistory.slice(-20);
+      if (game.actionHistory.length > 500) game.actionHistory = game.actionHistory.slice(-500);
 
       await container.item(id, id).replace(game);
       return cors({ success: true });
@@ -362,7 +361,7 @@ app.http("awardPot", {
         prevState,
         ts: new Date().toISOString(),
       });
-      if (game.actionHistory.length > 20) game.actionHistory = game.actionHistory.slice(-20);
+      if (game.actionHistory.length > 500) game.actionHistory = game.actionHistory.slice(-500);
 
       game.pot = [];
       game.potBreakdown = [];
@@ -389,11 +388,16 @@ app.http("undoAction", {
       const { resource: game } = await container.item(id, id).read();
       if (!game) return cors({ error: "Game not found" }, 404);
 
-      if (!game.actionHistory || game.actionHistory.length === 0) {
-        return cors({ error: "Nothing to undo" }, 400);
-      }
+      if (!game.actionHistory) game.actionHistory = [];
 
-      const lastAction = game.actionHistory.pop();
+      // Find the last undoable action (one that has a prevState snapshot)
+      let undoableIdx = -1;
+      for (let i = game.actionHistory.length - 1; i >= 0; i--) {
+        if (game.actionHistory[i].prevState) { undoableIdx = i; break; }
+      }
+      if (undoableIdx === -1) return cors({ error: "Nothing to undo" }, 400);
+
+      const lastAction = game.actionHistory.splice(undoableIdx, 1)[0];
 
       // Restore pot
       game.pot = lastAction.prevState.pot;
@@ -414,10 +418,140 @@ app.http("undoAction", {
         }
       }
 
+      // Record the revert in history so the event log shows it
+      game.actionHistory.push({
+        type: "undo",
+        description: `↩ Reverted: ${lastAction.description}`,
+        value: lastAction.value != null ? -Math.abs(lastAction.value) : undefined,
+        playerId: lastAction.playerId,
+        playerName: lastAction.playerName,
+        winnerId: lastAction.winnerId,
+        winnerName: lastAction.winnerName,
+        ts: new Date().toISOString(),
+      });
+      if (game.actionHistory.length > 500) game.actionHistory = game.actionHistory.slice(-500);
+
       await container.item(id, id).replace(game);
       return cors({ success: true, undid: lastAction.description });
     } catch (e: any) {
       ctx.error("undoAction error:", e);
+      return cors({ error: "Internal server error" }, 500);
+    }
+  },
+});
+
+// POST /api/games/{id}/pot/split — split pot among multiple players
+app.http("splitPot", {
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  route: "games/{id}/pot/split",
+  handler: async (req: HttpRequest, ctx: InvocationContext) => {
+    if (req.method === "OPTIONS") return cors({});
+    const { id } = req.params;
+    try {
+      const body = await req.json() as any;
+      if (!Array.isArray(body.splits) || body.splits.length === 0) {
+        return cors({ error: "splits array required" }, 400);
+      }
+
+      const container = getCosmosClient();
+      const { resource: game } = await container.item(id, id).read();
+      if (!game) return cors({ error: "Game not found" }, 404);
+
+      if (!game.pot || (game.pot as any[]).every((c: any) => c.count === 0)) {
+        return cors({ error: "Pot is empty" }, 400);
+      }
+
+      // Validate playerIds and amounts
+      for (const split of body.splits as { playerId: string; amount: number }[]) {
+        if (!split.playerId || !(split.amount > 0)) continue;
+        if (!game.players.find((p: any) => p.id === split.playerId)) {
+          return cors({ error: `Player ${split.playerId} not found` }, 404);
+        }
+      }
+
+      // Pot value in cents
+      const potValueCents = Math.round(
+        (game.pot as { color: string; count: number }[]).reduce((sum, c) => {
+          const cfg = (game.chipConfig as { color: string; value: number }[]).find((x: any) => x.color === c.color);
+          return sum + (cfg?.value ?? 0) * c.count;
+        }, 0) * 100
+      );
+      const totalSplitCents = body.splits.reduce((sum: number, s: any) => sum + Math.round((s.amount ?? 0) * 100), 0);
+      if (totalSplitCents > potValueCents + 1) {
+        return cors({ error: "Split total exceeds pot value" }, 400);
+      }
+
+      // Save undo snapshot
+      const prevState = {
+        pot: JSON.parse(JSON.stringify(game.pot)),
+        potBreakdown: JSON.parse(JSON.stringify(game.potBreakdown ?? [])),
+        players: (body.splits as { playerId: string; amount: number }[])
+          .filter(s => s.amount > 0)
+          .map(s => {
+            const p = game.players.find((x: any) => x.id === s.playerId);
+            return { id: p.id, chips: JSON.parse(JSON.stringify(p.chips)), totalBetsValue: p.totalBetsValue ?? 0 };
+          }),
+      };
+
+      // Sort chip config by value descending for greedy allocation
+      const sortedConfig = [...(game.chipConfig as { color: string; value: number }[])]
+        .sort((a, b) => b.value - a.value);
+
+      // Mutable pot chip counts
+      const availablePot: Record<string, number> = {};
+      for (const c of game.pot as { color: string; count: number }[]) availablePot[c.color] = c.count;
+
+      const splitResults: { playerId: string; playerName: string; amount: number }[] = [];
+
+      for (const split of body.splits as { playerId: string; amount: number }[]) {
+        if (!(split.amount > 0)) continue;
+        const player = game.players.find((p: any) => p.id === split.playerId);
+        if (!player) continue;
+
+        let remainingCents = Math.round(split.amount * 100);
+        for (const cfg of sortedConfig) {
+          const chipCents = Math.round(cfg.value * 100);
+          if (chipCents > remainingCents) continue;
+          const canTake = Math.floor(remainingCents / chipCents);
+          const available = availablePot[cfg.color] ?? 0;
+          const take = Math.min(canTake, available);
+          if (take > 0) {
+            const playerChip = (player.chips as any[]).find((c: any) => c.color === cfg.color);
+            if (playerChip) playerChip.count += take;
+            else player.chips.push({ color: cfg.color, count: take });
+            availablePot[cfg.color] = available - take;
+            remainingCents -= take * chipCents;
+          }
+        }
+
+        const actualAmount = (split.amount * 100 - remainingCents) / 100;
+        splitResults.push({ playerId: split.playerId, playerName: player.name, amount: actualAmount });
+      }
+
+      // Update pot chips with remaining counts
+      for (const c of game.pot as { color: string; count: number }[]) {
+        c.count = availablePot[c.color] ?? 0;
+      }
+      game.potBreakdown = [];
+
+      const totalDistributed = splitResults.reduce((s, r) => s + r.amount, 0);
+
+      if (!game.actionHistory) game.actionHistory = [];
+      game.actionHistory.push({
+        type: "pot_split",
+        description: `Pot split: ${splitResults.map(r => `${r.playerName} +$${r.amount.toFixed(2)}`).join(', ')}`,
+        value: totalDistributed,
+        splits: splitResults,
+        prevState,
+        ts: new Date().toISOString(),
+      });
+      if (game.actionHistory.length > 500) game.actionHistory = game.actionHistory.slice(-500);
+
+      await container.item(id, id).replace(game);
+      return cors({ success: true, results: splitResults });
+    } catch (e: any) {
+      ctx.error("splitPot error:", e);
       return cors({ error: "Internal server error" }, 500);
     }
   },

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import axios from 'axios'
 import BetScreen from './BetScreen'
+import SplitPot from './SplitPot'
+import EventLog from './EventLog'
 
 interface ChipConfig {
   color: string; label: string; value: number; count: number; hexColor: string
@@ -24,7 +26,8 @@ interface ActionEntry {
   playerName?: string
   winnerId?: string
   winnerName?: string
-  prevState: { players: { id: string }[] }
+  splits?: { playerId: string; playerName: string; amount: number }[]
+  prevState?: { players: { id: string }[] }
 }
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]
@@ -63,8 +66,9 @@ export default function HostGame() {
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showAwardPot, setShowAwardPot] = useState(false)
+  const [showSplitPot, setShowSplitPot] = useState(false)
   const [undoMessage, setUndoMessage] = useState('')
-  const [tab, setTab] = useState<'manage' | 'mystack'>('manage')
+  const [tab, setTab] = useState<'manage' | 'mystack' | 'log'>('manage')
 
   const fetchGame = useCallback(async () => {
     try {
@@ -197,7 +201,7 @@ export default function HostGame() {
   const player = game.players.find(p => p.id === selectedPlayer)
   const currentPotValue = potValue(game.pot ?? [], game.chipConfig)
   const hasPotChips = (game.pot ?? []).some(c => c.count > 0)
-  const canUndo = (game.actionHistory ?? []).length > 0
+  const canUndo = (game.actionHistory ?? []).some(a => a.prevState)
 
   return (
     <div className="space-y-6">
@@ -234,6 +238,12 @@ export default function HostGame() {
         >
           🎰 My Stack
         </button>
+        <button
+          onClick={() => setTab('log')}
+          className={`flex-1 py-3 font-bold text-sm transition ${tab === 'log' ? 'bg-green-600 text-yellow-400' : 'text-green-300 hover:text-white'}`}
+        >
+          📜 Log
+        </button>
       </div>
 
       {/* My Stack tab — host's own bet/buy-in screen */}
@@ -244,6 +254,11 @@ export default function HostGame() {
           gameId={gameId!}
           onRefresh={fetchGame}
         />
+      )}
+
+      {/* Log tab */}
+      {tab === 'log' && (
+        <EventLog game={game} />
       )}
 
       {tab === 'manage' && (<>
@@ -279,10 +294,16 @@ export default function HostGame() {
           <div className="text-right">
             <p className="text-2xl font-bold text-yellow-400">${currentPotValue.toFixed(2)}</p>
             {hasPotChips && (
-              <button onClick={() => setShowAwardPot(true)}
-                className="mt-2 bg-yellow-500 hover:bg-yellow-400 text-green-900 font-bold px-4 py-1.5 rounded-lg text-sm transition">
-                Award Pot
-              </button>
+              <div className="flex gap-2 mt-2 justify-end">
+                <button onClick={() => setShowSplitPot(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-1.5 rounded-lg text-sm transition">
+                  ✂️ Split
+                </button>
+                <button onClick={() => setShowAwardPot(true)}
+                  className="bg-yellow-500 hover:bg-yellow-400 text-green-900 font-bold px-4 py-1.5 rounded-lg text-sm transition">
+                  Award Pot
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -541,6 +562,16 @@ export default function HostGame() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Split Pot modal */}
+      {showSplitPot && (
+        <SplitPot
+          game={game}
+          gameId={gameId!}
+          onRefresh={fetchGame}
+          onClose={() => setShowSplitPot(false)}
+        />
       )}
       </>)}
     </div>

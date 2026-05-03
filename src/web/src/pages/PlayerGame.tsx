@@ -25,7 +25,7 @@ interface ActionEntry {
   playerName?: string
   winnerId?: string
   winnerName?: string
-  prevState: { players: { id: string }[] }
+  prevState?: { players: { id: string }[] }
 }
 interface Game {
   id: string; hostName: string; chipConfig: ChipConfig[]

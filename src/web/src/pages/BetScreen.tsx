@@ -19,7 +19,7 @@ interface Game {
   players: Player[]
   pot: { color: string; count: number }[]
   potBreakdown?: { playerId: string; playerName: string; value: number }[]
-  actionHistory: { type: string; prevState: { players: { id: string }[] }; playerId?: string; value?: number; winnerId?: string }[]
+  actionHistory: { type: string; prevState?: { players: { id: string }[] }; playerId?: string; value?: number; winnerId?: string }[]
 }
 
 interface Props {
