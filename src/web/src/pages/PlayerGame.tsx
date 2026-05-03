@@ -44,23 +44,24 @@ export default function PlayerGame() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'bet' | 'details'>('bet')
   const [splashAmount, setSplashAmount] = useState<number | null>(null)
+  const [betNotification, setBetNotification] = useState<{ playerName: string; amount: number } | null>(null)
   const lastSeenActionTs = useRef<string | null>(null)
 
   const fetchGame = useCallback(async () => {
     try {
       const res = await axios.get(`/api/games/${gameId}`)
       const incoming: Game = res.data
-      // Detect host-awarded pot win for this player
       if (playerId && incoming.actionHistory?.length) {
         const last = incoming.actionHistory[incoming.actionHistory.length - 1]
-        if (
-          last.type === 'pot_award' &&
-          last.winnerId === playerId &&
-          last.ts !== lastSeenActionTs.current
-        ) {
-          lastSeenActionTs.current = last.ts
-          setSplashAmount(last.value ?? 0)
-        } else {
+        const isNew = last.ts !== lastSeenActionTs.current
+        if (isNew) {
+          const isFirstLoad = lastSeenActionTs.current === null
+          if (last.type === 'pot_award' && last.winnerId === playerId) {
+            setSplashAmount(last.value ?? 0)
+          } else if (last.type === 'pot_contribution' && !isFirstLoad) {
+            setBetNotification({ playerName: last.playerName ?? 'Someone', amount: last.value ?? 0 })
+            setTimeout(() => setBetNotification(null), 3000)
+          }
           lastSeenActionTs.current = last.ts
         }
       }
@@ -134,6 +135,18 @@ export default function PlayerGame() {
 
   return (
     <div className="space-y-5">
+      {betNotification && (
+        <div className="fixed top-4 inset-x-4 z-50 flex justify-center pointer-events-none">
+          <div className="bg-gray-900 border-2 border-orange-400 rounded-2xl px-6 py-3 shadow-2xl text-center max-w-xs w-full">
+            <p className="text-orange-400 text-xs font-bold tracking-widest uppercase mb-0.5">Bet Placed 🎲</p>
+            <p className="text-white font-bold text-xl">
+              {betNotification.playerName === me?.name ? 'You' : betNotification.playerName}
+              {' '}bet{' '}
+              <span className="text-orange-300">${betNotification.amount.toFixed(2)}</span>
+            </p>
+          </div>
+        </div>
+      )}
       {splashAmount !== null && (
         <WinnerSplash amount={splashAmount} onDone={() => setSplashAmount(null)} />
       )}

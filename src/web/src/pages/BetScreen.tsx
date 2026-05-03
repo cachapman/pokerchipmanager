@@ -298,6 +298,34 @@ export default function BetScreen({ game, playerId, gameId, onRefresh }: Props) 
         </div>
       </div>
 
+      {/* Who's bet what — pot breakdown */}
+      {game.potBreakdown && game.potBreakdown.length > 0 && (
+        <div className="bg-green-800 rounded-xl p-4 border border-green-600">
+          <h3 className="font-bold text-yellow-400 text-sm mb-2">🃏 Current Round Bets</h3>
+          <div className="space-y-1.5">
+            {[...game.potBreakdown]
+              .sort((a, b) => b.value - a.value)
+              .map(entry => (
+                <div
+                  key={entry.playerId}
+                  className={`flex justify-between items-center text-sm rounded-lg px-3 py-1.5 ${
+                    entry.playerId === playerId
+                      ? 'bg-orange-900/40 border border-orange-700'
+                      : 'bg-green-900/40'
+                  }`}
+                >
+                  <span className={entry.playerId === playerId ? 'text-orange-300 font-bold' : 'text-white'}>
+                    {entry.playerId === playerId ? '→ You' : entry.playerName}
+                  </span>
+                  <span className={`font-bold ${entry.playerId === playerId ? 'text-orange-300' : 'text-yellow-300'}`}>
+                    ${entry.value.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Visual chip stacks */}
       <div className="bg-green-800 rounded-xl p-5 border border-green-600">
         <div className="flex justify-between items-center mb-5">
